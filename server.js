@@ -8,25 +8,29 @@ import mysql from "mysql";
 import http from 'http';
 import { Server } from 'socket.io';
 
-const app = express();
-const PORT = 3000;
-import {
-    PublicKey,
-    Keypair,
-    Connection,
-    Transaction,
-    clusterApiUrl,
-    SystemProgram,
-    SYSVAR_RENT_PUBKEY,
-    // TransactionSignature,
-    TransactionInstruction,
-    LAMPORTS_PER_SOL,
-    sendAndConfirmTransaction
-} from "@solana/web3.js";
+// import {
+//     PublicKey,
+//     Keypair,
+//     Connection,
+//     Transaction,
+//     clusterApiUrl,
+//     SystemProgram,
+//     SYSVAR_RENT_PUBKEY,
+//     // TransactionSignature,
+//     TransactionInstruction,
+//     LAMPORTS_PER_SOL,
+//     sendAndConfirmTransaction
+// } from "@solana/web3.js";
 import solanaweb3 from "@solana/web3.js";
-import bs58 from "bs58";
+// import bs58 from "bs58";
 // import { toast } from "react-toastify";
+import dotenv from 'dotenv'
 
+
+dotenv.config({ path: ".env" });
+
+const app = express();
+const PORT = process.env.PORT || 3000
 const { BN } = anchor.default;
 app.use(morgan("dev"));
 app.use(cookieParser());
@@ -49,7 +53,8 @@ let allUsers = []; // All users in current chat room
 io.on('connection', (socket) => {
     console.log(`User connected ${socket.id}`);
 
-    // We can write our socket event listeners in here...
+    let __createdtime__ = Date.now(); // Current timestamp
+    let chatRoomUsers = []
     socket.on('join_room', (data) => {
         const { username, room } = data; // Data sent from client when join_room event emitted
         chatRoom = room;
@@ -58,21 +63,29 @@ io.on('connection', (socket) => {
         socket.to(room).emit('chatroom_users', chatRoomUsers);
         socket.emit('chatroom_users', chatRoomUsers);
         socket.join(room); // Join the user to a socket room
+
+        // Send message to all users currently in the room, apart from the user that just joined
+        socket.to(room).emit('receive_message', {
+            message: `${username} has joined the chat room`,
+            username: CHAT_BOT,
+            __createdtime__,
+        });
+        socket.emit('receive_message', {
+            message: `Welcome ${username}`,
+            username: CHAT_BOT,
+            __createdtime__,
+        });
     });
 
-    let __createdtime__ = Date.now(); // Current timestamp
-    // Send message to all users currently in the room, apart from the user that just joined
-    socket.to(room).emit('receive_message', {
-        message: `${username} has joined the chat room`,
-        username: CHAT_BOT,
-        __createdtime__,
-    });
-
-    socket.emit('receive_message', {
-        message: `Welcome ${username}`,
-        username: CHAT_BOT,
-        __createdtime__,
-    });
+    socket.on('send_message', (data) => {
+        // const { message, username, room, __createdtime__ } = data;
+        const { room } = data;
+        io.in(room).emit('receive_message', data); // Send to all users in room, including sender
+        // todo: save message to db
+        // saveMessage(message, username, room, __createdtime__) // Save message in db
+        //   .then((response) => console.log(response))
+        //   .catch((err) => console.log(err));
+      });
 });
 
 const pebble_count = 8;
@@ -82,17 +95,24 @@ let expected_winner_pebble = 1;
 let bettingFlag = false;
 
 
-// create a connection object
-let connection = mysql.createConnection({
-    host: '127.0.0.1',
-    post: 3306,
-    user: 'root',
-    password: '',
-    database: 'mydb'
-});
+let connection = null;
+
+try {
+    // create a connection object
+    connection = mysql.createConnection({
+        host: '127.0.0.1',
+        post: 3306,
+        user: 'root',
+        password: '',
+        database: 'mydb'
+    });
+} catch (error) {
+    console.log("failed to connect to db error");
+    console.log(error.message);
+}
 
 // connect to the database
-connection.connect((err) => {
+connection?.connect((err) => {
     if (err) return console.error(err.message);
     console.log('Connected to the MySQL server.');
 });
@@ -116,6 +136,11 @@ function deposit(deposit_amount, deposit_pebble_num, bettor) {
 app.get('/', (req, res) => {
     console.log('/ visited');
     res.send('Hello world');
+});
+
+app.post('/', (req, res) => {
+    console.log('/ :post | visited');
+    return res.json({ message: 'ping successful!', ...req.body });
 });
 
 app.get("/init", (req, res) => {
@@ -171,12 +196,12 @@ app.get("/onViewStat", (req, res) => {
             console.log(err);
             return reject(err);
         }
-        connection.on('error', function (err) {
+        connection?.on('error', function (err) {
             console.log('>>> error >>>', err);
         });
 
         const values = [pebble_number];
-        connection.query(getQuery, values, (err, result) => {
+        connection?.query(getQuery, values, (err, result) => {
             if (err) {
                 console.error('Error inserting data into MySQL:', err);
                 throw err;
@@ -192,6 +217,9 @@ app.get("/onViewStat", (req, res) => {
 
 
 // Start the server
-app.listen(3000, () => {
-    console.log("Server running on port 3000");
+// app.listen(3000, () => {
+//     console.log("Server running on port 3000");
+// });
+server.listen(PORT, () => {
+    console.log("Server running on port " + PORT);
 });
