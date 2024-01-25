@@ -41,7 +41,8 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: 'https://humble-halibut-4wv5p96jj427pg9-5173.app.github.dev',
+        // origin: 'https://humble-halibut-4wv5p96jj427pg9-5173.app.github.dev',
+        origin: 'http://127.0.0.1:5173',
         methods: ['GET', 'POST'],
     },
 });
